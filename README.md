@@ -1,238 +1,145 @@
-<img src="magenta-logo-bg.png" height="75">
+## Building a new pip package
 
-**Magenta** is a research project exploring the role of machine learning
-in the process of creating art and music.  Primarily this
-involves developing new deep learning and reinforcement learning
-algorithms for generating songs, images, drawings, and other materials. But it's also
-an exploration in building smart tools and interfaces that allow
-artists and musicians to extend (not replace!) their processes using
-these models.  Magenta was started by some researchers and engineers
-from the [Google Brain team](https://research.google.com/teams/brain/),
-but many others have contributed significantly to the project. We use
-[TensorFlow](https://www.tensorflow.org) and release our models and
-tools in open source on this GitHub.  If you’d like to learn more
-about Magenta, check out our [blog](https://magenta.tensorflow.org),
-where we post technical details.  You can also join our [discussion
-group](https://groups.google.com/a/tensorflow.org/forum/#!forum/magenta-discuss).
+### setup.py updates
+Update the `REQUIRED_PACKAGES` list in the same file to ensure that all of our
+dependencies are listed and that they match the versions of the packages
+referenced in the Bazel `WORKSPACE` file. Also check that the correct version of
+tensorflow is listed.
 
-This is the home for our Python TensorFlow library. To use our models in the browser with [TensorFlow.js](https://js.tensorflow.org/), head to the [Magenta.js](https://github.com/tensorflow/magenta-js) repository.
-
-## Getting Started
-
-* [Installation](#installation)
-* [Using Magenta](#using-magenta)
-* [Playing a MIDI Instrument](#playing-a-midi-instrument)
-* [Development Environment (Advanced)](#development-environment)
-
-## Installation
-
-### Python Pip
-
-Magenta maintains a [pip package](https://pypi.python.org/pypi/magenta) for easy
-installation. We recommend using Anaconda to install it, but it can work in any
-standard Python environment. We support both Python 2 (>= 2.7) and Python 3 (>= 3.5).
-These instructions will assume you are using Anaconda.
-
-Note that if you want to enable GPU support, you should follow the [GPU Installation](#gpu-installation) instructions below.
-
-#### Automated Install
-
-If you are running Mac OS X or Ubuntu, you can try using our automated
-installation script. Just paste the following command into your terminal.
-
+### Building the package
 ```
-curl https://raw.githubusercontent.com/tensorflow/magenta/master/magenta/tools/magenta-install.sh > /tmp/magenta-install.sh
-bash /tmp/magenta-install.sh
+bazel build //magenta/tools/pip:build_pip_package
+bazel-bin/magenta/tools/pip/build_pip_package /tmp/magenta_pkg
+bazel-bin/magenta/tools/pip/build_pip_package /tmp/magenta_pkg --gpu
 ```
 
-After the script completes, open a new terminal window so the environment
-variable changes take effect.
-
-The Magenta libraries are now available for use within Python programs and
-Jupyter notebooks, and the Magenta scripts are installed in your path!
-
-Note that you will need to run `source activate magenta` to use Magenta every
-time you open a new terminal window.
-
-#### Manual Install
-
-If the automated script fails for any reason, or you'd prefer to install by
-hand, do the following steps.
-
-First, download the
-[Python 2.7 Miniconda installer](http://conda.pydata.org/miniconda.html) (you
-can skip this step if you already have any variant of conda installed).
-
-Next, create and activate a Magenta conda environment using Python 2.7 with
-Jupyter notebook support:
+Before this next step, make sure your preferred virtualenv or conda environment
+is activated.
 
 ```
-conda create -n magenta python=2.7 jupyter
-source activate magenta
+pip install -U /tmp/magenta_pkg/magenta-N.N.N-py2-none-any.whl
 ```
 
-Install the Magenta pip package:
+Next, test that it worked:
 
 ```
-pip install magenta
+# cd outside of the magenta repo.
+$ python
+>>> import magenta
+>>> magenta.__version__
 ```
 
-**NOTE**: In order to install the `rtmidi` package that we depend on, you may need to install headers for some sound libraries. On Linux, this command should install the necessary packages:
+Verify that the version of the installed package matches the new version number.
 
+Do the same test for the `magenta-gpu` package. The only difference with the
+gpu version of the package is that it depends on `tensorflow-gpu` instead of
+`tensorflow`.
+
+### Upload the new version to pypi
 ```
-sudo apt-get install build-essential libasound2-dev libjack-dev
-```
-
-The Magenta libraries are now available for use within Python programs and
-Jupyter notebooks, and the Magenta scripts are installed in your path!
-
-**NOTE**: You will need to run `source activate magenta` to use Magenta every
-time you open a new terminal window.
-
-#### GPU Installation
-
-If you have a GPU installed and you want Magenta to use it, you will need to
-follow the [Manual Install](#manual-install) instructions, but with a few
-modifications.
-
-First, make sure your system meets the [requirements to run tensorflow with GPU support](
-https://www.tensorflow.org/install/install_linux#nvidia_requirements_to_run_tensorflow_with_gpu_support).
-
-Next, follow the [Manual Install](#manual-install) instructions, but install the
-`magenta-gpu` package instead of the `magenta` package:
-
-```
-pip install magenta-gpu
+twine upload /tmp/magenta_pkg/magenta-N.N.N-py2-none-any.whl
+twine upload /tmp/magenta_pkg/magenta-gpu-N.N.N-py2-none-any.whl
 ```
 
-The only difference between the two packages is that `magenta-gpu` depends on
-`tensorflow-gpu` instead of `tensorflow`.
+After this step, anyone should be able to `pip install magenta` and get the
+latest version.
 
-Magenta should now have access to your GPU.
+## Adding to the pip package
 
-### Docker
-Another way to try out Magenta is to use our Docker container.
-First, [install Docker](https://docs.docker.com/engine/installation/). Next, run
-this command:
+### Libraries
 
-```
-docker run -it -p 6006:6006 -v /tmp/magenta:/magenta-data tensorflow/magenta
-```
+As a convention, libraries that we want to expose externally through the pip
+package should be listed as dependencies in otherwise empty `py_library`
+targets that share the same name as their directory. Those targets should then
+be referenced as dependencies by the target for the directory above them, all
+the way up to the root `//magenta` target. (Targets named the same as their
+package are implicit; `//magenta` is short for `//magenta:magenta`.)
 
-This will start a shell in a directory with all Magenta components compiled,
-installed, and ready to run. It will also map port 6006 of the host machine to
-the container so you can view TensorBoard servers that run within the container.
+This allows us to list `//magenta` as the main `py_library` dependency for
+building the pip package and distributes maintenance of public API dependencies
+to each package.
 
-This also maps the directory `/tmp/magenta` on the host machine to
-`/magenta-data` within the Docker session. Windows users can change
-`/tmp/magenta` to a path such as `C:/magenta`, and Mac and Linux users
-can use a path relative to their home folder such as `~/magenta`.
-**WARNING**: only data saved in `/magenta-data` will persist across Docker
-sessions.
-
-The Docker image also includes several pre-trained models in
-`/magenta/models`. For example, to generate some MIDI files using the
-[Lookback Melody RNN](magenta/models/melody_rnn#lookback), run this command:
+For example, to expose `magenta.pipelines.statistics`, the
+`magenta/pipelines/BUILD` file will have a section that looks like this:
 
 ```
-melody_rnn_generate \
-  --config=lookback_rnn \
-  --bundle_file=/magenta-models/lookback_rnn.mag \
-  --output_dir=/magenta-data/lookback_rnn/generated \
-  --num_outputs=10 \
-  --num_steps=128 \
-  --primer_melody="[60]"
+# The Magenta public API.
+py_library(
+    name = "pipelines",
+    deps = [
+        ":statistics",
+    ],
+)
 ```
 
-**NOTE**: Verify that the `--output_dir` path matches the path you
-mapped as your shared folder when running the `docker run` command. This
-example command presupposes that you are using `/magenta-data` as your
-shared folder from the example `docker run` command above.
-
-One downside to the Docker container is that it is isolated from the host. If
-you want to listen to a generated MIDI file, you'll need to copy it to the host
-machine. Similarly, because our
-[MIDI instrument interface](magenta/interfaces/midi) requires access to the host
-MIDI port, it will not work within the Docker container. You'll need to use the
-full Development Environment.
-
-You may find at some point after installation that we have released a new version of Magenta and your Docker image is out of date. To update the image to the latest version, run:
+And the `magenta/BUILD` file will have a section that looks like this:
 
 ```
-docker pull tensorflow/magenta
+# The Magenta public API.
+py_library(
+    name = "magenta",
+    visibility = ["//magenta:__subpackages__"],
+    deps = [
+        "//magenta/pipelines",
+    ],
+)
 ```
 
-**NOTE**: Our Docker image is also available at `gcr.io/tensorflow/magenta`.
+Because we want `import magenta` to make all modules immediately available,
+we also need to create a custom `__init__.py` in the magenta directory and
+reference it in the `srcs` field for the `//magenta:magenta` target.
 
-## Using Magenta
+When you add a new module to be exported, you'll also need to add it to this
+`__init__.py` file. There are instructions in that file for how to
+automatically generate the list based on the python library dependencies.
 
-You can now train our various models and use them to generate music, audio, and images. You can
-find instructions for each of the models by exploring the [models directory](magenta/models).
+Now the `//magenta/tools/pip:build_pip_package` target just needs to depend on
+`//magenta`.
 
-To get started, create your own melodies with TensorFlow using one of the various configurations of our [Melody RNN](magenta/models/melody_rnn) model; a recurrent neural network for predicting melodies.
+The `//magenta` dependency also provides an easy way to verify that the models
+developed within the magenta repo use the same code that is available to
+external developers. Rather than depend directly on library targets, models
+should depend only on the `//magenta` target.
 
-## Playing a MIDI Instrument
+Libraries should continue to use dependencies like normal: one target for every
+python file, and every `import` statement should have a corresponding
+dependency. This ensures we avoid circular dependencies and also makes builds
+faster for tests.
 
-After you've trained one of the models above, you can use our [MIDI interface](magenta/interfaces/midi) to play with it interactively.
+### Scripts
 
-We also have created several [demos](https://github.com/tensorflow/magenta-demos) that provide a UI for this interface, making it easier to use (e.g., the browser-based [AI Jam](https://github.com/tensorflow/magenta-demos/tree/master/ai-jam-js)).
+Our pip package also includes several executable scripts (e.g.,
+`convert_dir_to_note_sequences`). These are just python files that pip
+create executable wrappers around and installs to the python binary path. After
+installation, users will have the script installed in their path. To add a new
+script to the distribution, follow these steps:
 
-## Development Environment
-If you want to develop on Magenta, you'll need to set up the full Development
-Environment.
-
-The installation has three components. You are going to need Bazel to build packages, TensorFlow to run models, and an up-to-date version of this repository.
-
-First, clone this repository:
-
-```
-git clone https://github.com/tensorflow/magenta.git
-```
-
-Next, [install Bazel](https://bazel.build/docs/install.html). We require the latest version, currently 0.13.1.
-
-You will also need to install some required python dependencies. We recommend
-using a conda environment and installing with pip. See [setup.py](magenta/tools/pip/setup.py) for the current list of required dependencies.
-
-Finally, [install TensorFlow](https://www.tensorflow.org/get_started/os_setup.html).  To see what version of TensorFlow the code currently requires, check the dependency listed in [setup.py](magenta/tools/pip/setup.py).
-
-Also, verify that your environment uses a supported Python version: >=2.7 for Python 2 or >=3.5 for Python 3.
-
-After that's done, change directory to `./magenta` or your clone path:
+First, add the script as a data dependency to the
+`//magenta/tools/pip:build_pip_package` target. You will likely also need to
+modify the visibility of the script's target so the pip builder can see it by
+adding this line to the script's target:
 
 ```
-cd ./magenta
+visibility = ["//magenta/tools/pip:__subpackages__"],
 ```
 
-And then run the tests with this command:
+Next, modify `setup.py` so the script's python module is listed under
+`CONSOLE_SCRIPTS`.
 
-```
-bazel test //magenta/...
-```
+Finally, you will need to modify the script itself so that it can be invoked
+either directly or by the pip-generated wrapper script. The pip wrapper will
+look for a method called `console_entry_point` as defined in `setup.py`, but
+running the script directly (e.g., after a bazel build'ing it) will just invoke
+the `if __name__ == '__main__':` condition. Both of those need to trigger
+`tf.app.run` to run the actual `main` function because `tf.app.run` takes care
+of things like initializing flags. The easiest way to do this is by adding the
+following snippet to the end of your script:
 
-To build and install the pip package from source, follow the
-[pip build instructions](magenta/tools/pip#building-the-package). You can also
-use our [build script](magenta/tools/build.sh).
+```python
+def console_entry_point():
+  tf.app.run(main)
 
-If you want to build and run commands with Bazel, you'll need to run the package
-that the build step generates. There are two ways to do this. The first option is
-to look at the output of the build command to find the path to the generated file.
-For example, if you want to build the melody_rnn_generate script:
 
-```
-$ bazel build //magenta/models/melody_rnn:melody_rnn_generate
-INFO: Found 1 target...
-Target //magenta/models/melody_rnn:melody_rnn_generate up-to-date:
-  bazel-bin/magenta/models/melody_rnn/melody_rnn_generate
-
-$ bazel-bin/magenta/models/melody_rnn/melody_rnn_generate --config=...
-```
-
-The other option is to use the `bazel run` command, which combines the two steps
-above. Note that if you use `bazel run`, you'll need to add an extra `--` before
-the command line arguments to differentiate between Bazel arguments and arguments
-to the command.
-
-```
-$ bazel run //magenta/models/melody_rnn:melody_rnn_generate -- --config=...
+if __name__ == '__main__':
+  console_entry_point()
 ```
